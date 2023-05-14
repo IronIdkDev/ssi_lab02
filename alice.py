@@ -30,12 +30,12 @@ def encrypt_secret_key(secret_key, public_key):
 # Function to decrypt the message using the secret key
 def decrypt_message(encrypted_message, key):
     iv, ciphertext, tag = encrypted_message[:12], encrypted_message[12:-16], encrypted_message[-16:]
-    cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend())
+    cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
     decryptor = cipher.decryptor()
     decryptor.authenticate_additional_data(b'')
     decrypted_message = decryptor.update(ciphertext)
     try:
-        decrypted_message += decryptor.finalize_with_tag(tag)
+        decrypted_message += decryptor.finalize()
         return decrypted_message.decode()
     except cryptography.exceptions.InvalidTag:
         return None
@@ -56,7 +56,7 @@ encrypted_message = response.content
 # Step 6: Alice decrypts the message using the Secret Key
 decrypted_message = decrypt_message(encrypted_message, key)
 if decrypted_message:
-    print(f"Decrypted message: {decrypted_message}")
+    print(f"Decrypted message: {decrypted_message.decode()}")
 else:
     print("Authentication failed: Invalid tag")
 
@@ -72,15 +72,15 @@ renewed_encrypted_message = response.content
 
 # Step 15: Alice decrypts the renewed message using the renewed Secret Key
 renewed_iv, renewed_ciphertext, renewed_tag = renewed_encrypted_message[:12], renewed_encrypted_message[12:-16], renewed_encrypted_message[-16:]
-renewed_cipher = Cipher(algorithms.AES(renewed_key), modes.GCM(renewed_iv), backend=default_backend())
+renewed_cipher = Cipher(algorithms.AES(renewed_key), modes.GCM(renewed_iv, renewed_tag), backend=default_backend())
 renewed_decryptor = renewed_cipher.decryptor()
 renewed_decryptor.authenticate_additional_data(b'')
 decrypted_renewed_message = renewed_decryptor.update(renewed_ciphertext)
 try:
-    decrypted_renewed_message += renewed_decryptor.finalize_with_tag(renewed_tag)
+    decrypted_renewed_message += renewed_decryptor.finalize()
     print(f"Decrypted renewed message: {decrypted_renewed_message.decode()}")
 except cryptography.exceptions.InvalidTag:
     print("Authentication failed: Invalid renewed tag")
 
 # Step 16: Alice prints the decrypted renewed message
-print(f"Decrypted renewed message: {decrypted_renewed_message}")
+print(f"Decrypted renewed message: {decrypted_renewed_message.decode()}")
