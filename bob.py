@@ -8,6 +8,11 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
+# Route for the root path
+@app.route('/')
+def home():
+    return "Server is running"
+
 # Step 2: Bob replies with a SEND_CERTIFICATE to ALICE
 @app.route('/get_certificate', methods=['GET'])
 def get_certificate():
