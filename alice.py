@@ -1,5 +1,6 @@
 import os
 import requests
+import cryptography
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -59,9 +60,8 @@ tag = encrypted_message[-16:]
 # Update the decryptor with the ciphertext
 decrypted_message = decryptor.update(ciphertext)
 
-# Authenticate the additional data and pass the authentication tag during finalization
-decryptor.authenticate_additional_data(tag)
-decrypted_message += decryptor.finalize()
+# Pass the authentication tag during finalization
+decrypted_message += decryptor.finalize_with_tag(tag)
 
 # Step 7: Alice prints the decrypted message
 print(f"Decrypted message: {decrypted_message.decode()}")
@@ -103,9 +103,8 @@ renewed_tag = renewed_encrypted_message[-16:]
 # Update the renewed decryptor with the ciphertext
 decrypted_renewed_message = renewed_decryptor.update(renewed_ciphertext)
 
-# Authenticate the additional data and pass the authentication tag during finalization
-renewed_decryptor.authenticate_additional_data(renewed_tag)
-decrypted_renewed_message += renewed_decryptor.finalize()
+# Pass the authentication tag during finalization
+decrypted_renewed_message += renewed_decryptor.finalize_with_tag(renewed_tag)
 
 # Step 16: Alice prints the decrypted renewed message
 print(f"Decrypted renewed message: {decrypted_renewed_message.decode()}")
