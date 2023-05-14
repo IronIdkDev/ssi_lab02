@@ -34,7 +34,7 @@ def get_certificate():
 # Step 9: Bob deciphers the Secret Key using Bob's private Key
 @app.route('/receive_secret_key', methods=['POST'])
 def receive_secret_key():
-    secret_key_cipher = cgi_escape(request.data)
+    secret_key_cipher = request.data.decode('utf-8')
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -63,7 +63,7 @@ def receive_secret_key():
 # Step 17: Bob deciphers the renewed Secret Key with Bob's private key
 @app.route('/renew_secret_key', methods=['POST'])
 def renew_secret_key():
-    renewed_secret_key_cipher = cgi_escape(request.data)
+    renewed_secret_key_cipher = request.data.decode('utf-8')
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
