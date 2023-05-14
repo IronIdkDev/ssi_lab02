@@ -1,7 +1,6 @@
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives import padding as sym_padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from flask import Flask, request
@@ -47,9 +46,12 @@ def receive_secret_key():
     )
 
     # Step 10: Bob encrypts the message using its Secret Key
-    cipher = Cipher(algorithms.AES(secret_key), modes.ECB(), backend=default_backend()).encryptor()
+    iv = b'\x00' * 16  # Initialize the IV to a fixed value for simplicity
+    cipher = Cipher(algorithms.AES(secret_key), modes.GCM(iv), backend=default_backend()).encryptor()
+    padder = padding.PKCS7(algorithms.AES.block_size).padder()  # Use PKCS7 padding
     message = b'This is a secret message'
-    ciphertext = cipher.update(message) + cipher.finalize()
+    padded_message = padder.update(message) + padder.finalize()  # Apply padding to the message
+    ciphertext = cipher.update(padded_message) + cipher.finalize()
 
     # Step 11: Bob sends the encrypted message with the Secret Key
     return ciphertext
@@ -73,12 +75,16 @@ def renew_secret_key():
     )
 
     # Step 18: Bob encrypts the message with the new Secret Key
-    cipher = Cipher(algorithms.AES(renewed_secret_key), modes.ECB(), backend=default_backend()).encryptor()
+    iv = b'\x00' * 16  # Initialize the IV to a fixed value for simplicity
+    cipher = Cipher(algorithms.AES(renewed_secret_key), modes.GCM(iv), backend=default_backend()).encryptor()
+    padder = padding.PKCS7(algorithms.AES.block_size).padder()  # Use PKCS7 padding
     message = b'This is a renewed secret message'
-    ciphertext = cipher.update(message) + cipher.finalize()
+    padded_message = padder.update(message) + padder.finalize()  # Apply padding to the message
+    ciphertext = cipher.update(padded_message) + cipher.finalize()
 
     # Step 19: Bob sends the message with the renewed secret key
     return ciphertext
+
 
 if __name__ == '__main__':
     app.run(host='localhost', port=8000)

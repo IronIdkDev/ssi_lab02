@@ -1,21 +1,37 @@
-from cryptography.hazmat.primitives.asymmetric import rsa
+import os
+import requests
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives import padding as sym_padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-import requests
+from cryptography.hazmat.primitives import hmac
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-# Step 1: Alice sends a GET_CERTIFICATE to Bob
+# Step 1: Alice gets Bob's public key
 response = requests.get('http://localhost:8000/get_certificate')
-certificate = response.content
+bob_public_key = serialization.load_pem_public_key(response.content, backend=default_backend())
 
-# Step 4: Alice creates a secret SK key
-secret_key = b'ThisIsASecretKey'
+# Step 3: Alice encrypts the Secret Key using Bob's public key
+secret_key = b'This is a secret key'
 
-# Step 5: Alice encrypts her SK with Bob's public key
-public_key = serialization.load_pem_public_key(certificate, backend=default_backend())
-cipher = public_key.encrypt(
+# Generate a random key instead of using a hardcoded value
+random_key = os.urandom(32)
+
+# Generate a random salt instead of using a hardcoded value
+salt = os.urandom(16)
+
+# Use PBKDF2 to derive a key from the random key
+kdf = PBKDF2HMAC(
+    algorithm=hashes.SHA256(),
+    length=32,
+    salt=salt,
+    iterations=100000,
+    backend=default_backend()
+)
+key = kdf.derive(random_key)
+
+encrypted_secret_key = bob_public_key.encrypt(
     secret_key,
     padding.OAEP(
         mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -24,15 +40,43 @@ cipher = public_key.encrypt(
     )
 )
 
-# Step 6: Alice sends the SECRET_KEY to Bob
-requests.post('http://localhost:8000/receive_secret_key', data=cipher)
+# Step 4: Alice sends the encrypted Secret Key to Bob
+response = requests.post('http://localhost:8000/receive_secret_key', data=encrypted_secret_key)
 
-# Step 13: Alice creates a second Secret Key
-new_secret_key = b'ThisIsANewSecretKey'
+# Step 5: Alice receives the encrypted message from Bob
+encrypted_message = response.content
 
-# Step 15: Alice encrypts the new Secret Key with Bob's public key
-new_cipher = public_key.encrypt(
-    new_secret_key,
+# Step 6: Alice decrypts the message using the Secret Key
+iv = os.urandom(12)  # Generate a random 96-bit IV
+cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend())
+decryptor = cipher.decryptor()
+decryptor.authenticate_additional_data(b'')  # No additional authenticated data
+
+# Split the encrypted message into the ciphertext and the authentication tag
+ciphertext = encrypted_message[:-16]
+tag = encrypted_message[-16:]
+
+# Update the decryptor with the ciphertext
+decrypted_message = decryptor.update(ciphertext)
+
+# Authenticate the additional data and pass the authentication tag during finalization
+decryptor.authenticate_additional_data(tag)
+decrypted_message += decryptor.finalize()
+
+# Step 7: Alice prints the decrypted message
+print(f"Decrypted message: {decrypted_message.decode()}")
+
+# Step 12: Alice renews the Secret Key
+renewed_secret_key = b'This is a renewed secret key'
+
+# Generate a new random key for renewal
+renewed_random_key = os.urandom(32)
+
+# Use PBKDF2 to derive a key from the new random key
+renewed_key = kdf.derive(renewed_random_key)
+
+renewed_encrypted_secret_key = bob_public_key.encrypt(
+    renewed_secret_key,
     padding.OAEP(
         mgf=padding.MGF1(algorithm=hashes.SHA256()),
         algorithm=hashes.SHA256(),
@@ -40,10 +84,28 @@ new_cipher = public_key.encrypt(
     )
 )
 
-# Step 16: Alice sends the renew Secret Key
-requests.post('http://localhost:8000/renew_secret_key', data=new_cipher)
+# Step 13: Alice sends the renewed Secret Key to Bob
+response = requests.post('http://localhost:8000/renew_secret_key', data=renewed_encrypted_secret_key)
 
-# Step 20: Alice deciphers the message using the renewed secret key
-decipher = Cipher(algorithms.AES(new_secret_key), modes.ECB(), backend=default_backend()).decryptor()
-plaintext = decipher.update(ciphertext) + decipher.finalize()
-print("Decrypted message:", plaintext.decode())
+# Step 14: Alice receives the renewed encrypted message from Bob
+renewed_encrypted_message = response.content
+
+# Step 15: Alice decrypts the renewed message using the renewed Secret Key
+renewed_iv = os.urandom(12)  # Generate a random 96-bit IV
+renewed_cipher = Cipher(algorithms.AES(renewed_key), modes.GCM(renewed_iv), backend=default_backend())
+renewed_decryptor = renewed_cipher.decryptor()
+renewed_decryptor.authenticate_additional_data(b'')  # No additional authenticated data
+
+# Split the renewed encrypted message into the ciphertext and the authentication tag
+renewed_ciphertext = renewed_encrypted_message[:-16]
+renewed_tag = renewed_encrypted_message[-16:]
+
+# Update the renewed decryptor with the ciphertext
+decrypted_renewed_message = renewed_decryptor.update(renewed_ciphertext)
+
+# Authenticate the additional data and pass the authentication tag during finalization
+renewed_decryptor.authenticate_additional_data(renewed_tag)
+decrypted_renewed_message += renewed_decryptor.finalize()
+
+# Step 16: Alice prints the decrypted renewed message
+print(f"Decrypted renewed message: {decrypted_renewed_message.decode()}")
