@@ -1,13 +1,13 @@
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization, hashes, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from flask import Flask, request
 from flask_wtf.csrf import CSRFProtect
-import cryptography, os
+import os, secrets
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = secrets.token_hex(16)
 csrf = CSRFProtect(app)
 
 # Route for the root path
