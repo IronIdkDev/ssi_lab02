@@ -4,7 +4,8 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from flask import Flask, request, csrf_protect
-import cryptography
+from cgi import escape
+import cryptography, os
 
 app = Flask(__name__)
 
@@ -32,7 +33,7 @@ def get_certificate():
 # Step 9: Bob deciphers the Secret Key using Bob's private Key
 @app.route('/receive_secret_key', methods=['POST'])
 def receive_secret_key():
-    secret_key_cipher = request.data
+    secret_key_cipher = escape(request.data)
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -48,7 +49,7 @@ def receive_secret_key():
     )
 
     # Step 10: Bob encrypts the message using its Secret Key
-    iv = b'\x00' * 16  # Initialize the IV to a fixed value for simplicity
+    iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(secret_key), modes.GCM(iv), backend=default_backend()).encryptor()
     padder = padding.PKCS7(algorithms.AES.block_size).padder()  # Use PKCS7 padding
     message = b'This is a secret message'
@@ -61,7 +62,7 @@ def receive_secret_key():
 # Step 17: Bob deciphers the renewed Secret Key with Bob's private key
 @app.route('/renew_secret_key', methods=['POST'])
 def renew_secret_key():
-    renewed_secret_key_cipher = request.data
+    renewed_secret_key_cipher = escape(request.data)
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -77,7 +78,7 @@ def renew_secret_key():
     )
 
     # Step 18: Bob encrypts the message with the new Secret Key
-    iv = b'\x00' * 16  # Initialize the IV to a fixed value for simplicity
+    iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(renewed_secret_key), modes.GCM(iv), backend=default_backend()).encryptor()
     padder = padding.PKCS7(algorithms.AES.block_size).padder()  # Use PKCS7 padding
     message = b'This is a renewed secret message'
