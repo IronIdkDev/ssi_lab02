@@ -1,5 +1,4 @@
 import time
-import cryptography
 import requests
 import logging
 import secrets
@@ -28,8 +27,8 @@ def get_bob_public_key():
         except requests.exceptions.ConnectionError:
             logging.error("Connection error. Retrying...")
             time.sleep(1)
-        except requests.exceptions.RequestException:
-            logging.error("Connection failed:")
+        except requests.exceptions.RequestException as e:
+            logging.error("Connection failed: %s", e)
             logging.error("Retrying...")
             time.sleep(1)
 
@@ -77,9 +76,14 @@ encrypted_secret_key, key = encrypt_secret_key(secret_key, bob_public_key)
 
 # Step 4: Alice sends the encrypted Secret Key to Bob
 try:
-    response = requests.post('http://localhost:8000/receive_secret_key', data=encrypted_secret_key)
-except requests.exceptions.ConnectionError as e:
+    response = requests.post('http://localhost:8000/receive_secret_key', data=encrypted_secret_key, timeout=5)
+    response.raise_for_status()
+except requests.exceptions.RequestException as e:
     print("Connection error occurred:", e)
+    exit(1)
+except requests.exceptions.HTTPError as e:
+    print("Server returned an error:", e)
+    print("Response content:", response.content)
     exit(1)
 
 # Step 5: Alice receives the encrypted message from Bob
