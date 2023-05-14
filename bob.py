@@ -5,7 +5,6 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from flask import Flask, request
 from flask_wtf.csrf import CSRFProtect
-from cgi import escape as cgi_escape
 import cryptography, os
 
 app = Flask(__name__)
