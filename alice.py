@@ -7,6 +7,8 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.exceptions import InvalidTag
+
 
 # Function to establish connection and retrieve Bob's public key
 def get_bob_public_key():
@@ -15,8 +17,15 @@ def get_bob_public_key():
             response = requests.get('http://localhost:8000/get_certificate', timeout=5)
             response.raise_for_status()
             return serialization.load_pem_public_key(response.content, backend=default_backend())
-        except requests.RequestException:
-            print("Connection failed. Retrying...")
+        except requests.exceptions.Timeout:
+            print("Connection timed out. Retrying...")
+            time.sleep(1)
+        except requests.exceptions.ConnectionError:
+            print("Connection error. Retrying...")
+            time.sleep(1)
+        except requests.exceptions.RequestException as e:
+            print("Connection failed:", e)
+            print("Retrying...")
             time.sleep(1)
 
 # Function to encrypt the secret key using Bob's public key
@@ -29,16 +38,24 @@ def encrypt_secret_key(secret_key, public_key):
 
 # Function to decrypt the message using the secret key
 def decrypt_message(encrypted_message, key):
-    iv, ciphertext, tag = encrypted_message[:12], encrypted_message[12:-16], encrypted_message[-16:]
-    cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
+    iv, ciphertext, tag = (
+        encrypted_message[:12],
+        encrypted_message[12:-16],
+        encrypted_message[-16:]
+    )
+    cipher = Cipher(
+        algorithms.AES(key),
+        modes.GCM(iv, tag),
+        backend=default_backend()
+    )
     decryptor = cipher.decryptor()
     decryptor.authenticate_additional_data(b'')
     decrypted_message = decryptor.update(ciphertext)
     try:
-        decrypted_message += decryptor.finalize()
-        return decrypted_message.decode()
-    except cryptography.exceptions.InvalidTag:
-        return None
+        decryptor.finalize()
+    except cryptography.exceptions.InvalidTag as e:
+        raise e
+    return decrypted_message
 
 # Step 1: Alice gets Bob's public key
 bob_public_key = get_bob_public_key()
@@ -56,7 +73,8 @@ encrypted_message = response.content
 # Step 6: Alice decrypts the message using the Secret Key
 decrypted_message = decrypt_message(encrypted_message, key)
 if decrypted_message:
-    print(f"Decrypted message: {decrypted_message.decode()}")
+    # Step 7: Alice prints the decrypted message
+    print(f"Decrypted message: {decrypted_message}")
 else:
     print("Authentication failed: Invalid tag")
 
@@ -65,22 +83,21 @@ renewed_secret_key = b'This is a renewed secret key'
 renewed_encrypted_secret_key, renewed_key = encrypt_secret_key(renewed_secret_key, bob_public_key)
 
 # Step 13: Alice sends the renewed Secret Key to Bob
-response = requests.post('http://localhost:8000/renew_secret_key', data=renewed_encrypted_secret_key)
+try:
+    response = requests.post('http://localhost:8000/renew_secret_key', data=renewed_encrypted_secret_key, timeout=5)
+    response.raise_for_status()
+except requests.RequestException as e:
+    print("Renewal failed:", e)
+    exit(1)
 
 # Step 14: Alice receives the renewed encrypted message from Bob
 renewed_encrypted_message = response.content
 
-# Step 15: Alice decrypts the renewed message using the renewed Secret Key
-renewed_iv, renewed_ciphertext, renewed_tag = renewed_encrypted_message[:12], renewed_encrypted_message[12:-16], renewed_encrypted_message[-16:]
-renewed_cipher = Cipher(algorithms.AES(renewed_key), modes.GCM(renewed_iv, renewed_tag), backend=default_backend())
-renewed_decryptor = renewed_cipher.decryptor()
-renewed_decryptor.authenticate_additional_data(b'')
-decrypted_renewed_message = renewed_decryptor.update(renewed_ciphertext)
+# Step 15: Alice receives the renewed encrypted message from Bob
 try:
-    decrypted_renewed_message += renewed_decryptor.finalize()
-    print(f"Decrypted renewed message: {decrypted_renewed_message.decode()}")
-except cryptography.exceptions.InvalidTag:
-    print("Authentication failed: Invalid renewed tag")
-
-# Step 16: Alice prints the decrypted renewed message
-print(f"Decrypted renewed message: {decrypted_renewed_message.decode()}")
+    response = requests.get('http://localhost:8000/get_renewed_message', timeout=5)
+    response.raise_for_status()
+    renewed_encrypted_message = response.content
+except requests.RequestException as e:
+    print("Failed to retrieve renewed message:", e)
+    exit(1)
