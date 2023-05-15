@@ -10,6 +10,11 @@ SERVER_HOST = 'localhost'
 SERVER_PORT = 1234
 SECRET_KEY_MESSAGE = 'SECRET_KEY'
 
+GET_CERTIFICATE = 'GET_CERTIFICATE'
+SENT_CERTIFICATE = 'SENT_CERTIFICATE'
+RENEW_SECRET_KEY_MESSAGE = 'RENEW_SECRET_KEY'
+
+
 #Creates a self Signed Certicifate
 def create_self_signed_certificate(key):
     print('Creating a self-signed certificate...')
@@ -53,6 +58,29 @@ def create_self_signed_certificate(key):
     with open("selfsigned_cert.pem", "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
         print('Certificate created successfully.')
+
+
+    #CSR
+    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        # Details to be contained in the certificate
+        x509.NameAttribute(NameOID.COUNTRY_NAME, country_name),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state_or_province_name),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, locality_name),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization_name),
+        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+    ])).add_extension(
+        x509.SubjectAlternativeName([
+            # Alternative names for common name
+            x509.DNSName(u"mysite.com"),
+            x509.DNSName(u"www.mysite.com"),
+        ]),
+        critical=False,
+    # Sign the CSR with our private key
+    ).sign(key, hashes.SHA256())
+
+    # write the CSR to disk
+    with open("bob.csr", "wb") as f:
+        f.write(csr.public_bytes(serialization.Encoding.PEM))
         
 def create_key_pair(filename):
     print('Creating a key pair...')
@@ -80,20 +108,63 @@ def read_key_pair(filename):
     return private_key
     
 def send_certificate_to_client(client_socket):
-    message = "#Step 2: Sending the certificate."
-    client_socket.sendall(message.encode())
-    print('Sent message: SENT_CERTIFICATE to the client.')
+    client_socket.sendall(SENT_CERTIFICATE.encode())
+    print('Sent message: #Step 2: Sending the certificate.')
     
-    with open("selfsigned_cert.pem", "rb") as f:
-        certificate = f.read()
-    client_socket.sendall(certificate)
+    #with open("selfsigned_cert.pem", "rb") as f:
+    #    certificate = f.read()
+    #client_socket.sendall(certificate)
     print('Sent certificate to the client.')
 
-def decrypt_secret_key(encrypted_key, params):
-    print('\n', 'Decrypting the secret key...')
-    # Decrypt the secret key
-    decrypt_secret_key = rsa.decrypt(encrypted_key, params)
-    return decrypt_secret_key
+#def decrypt_secret_key(encrypted_key, params):
+#    print('\n', 'Decrypting the secret key...')
+#    # Decrypt the secret key
+#    decrypt_secret_key = rsa.decrypt(encrypted_key, params)
+#    return decrypt_secret_key
+
+def decipher_with_private_key(privkey, ciphertext, params):
+    print("\nDeciphering with the private key...")
+    plaintext = privkey.decrypt(ciphertext, padding.OAEP(mgf=padding.MGF1(algorithm=params), algorithm=params, label=None))
+    print("Plaintext = " + str(plaintext.decode()))
+
+# Encrypt with AES, using multiple modes
+def do_aes(message, mode, key, iv=None, nonce=None):
+    print("\nEncrypting with AES, 256-bit key, mode " + mode)
+
+    print("Data:" + str(message))
+
+    # AES works on blocks of 128bits (32 bytes) so we need to make user the message is multiple of the block lenght
+    if len(message) % 16 != 0:
+        # handling the padding of the messages
+        padder = padding.PKCS7(algorithms.AES.block_size).padder()
+        paddeddata = padder.update(message)
+        paddeddata += padder.finalize()
+        print("Data (padded):" +  str(paddeddata))
+        message = paddeddata
+
+    print("KEY = " + str(base64.b64encode(key)))
+    if mode == 'ECB':
+        cipher = Cipher(algorithms.AES(key), modes.ECB())
+    if mode == 'CBC':
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    if mode == 'OFB':
+        cipher = Cipher(algorithms.AES(key), modes.OFB(iv))
+    if mode == 'CFB':
+        cipher = Cipher(algorithms.AES(key), modes.CFB(iv))
+    if mode == 'CTR':
+        cipher = Cipher(algorithms.AES(key), modes.CTR(nonce))
+
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(message) + encryptor.finalize()
+    decryptor = cipher.decryptor()
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+    print("Ciphertext = " + str(base64.b64encode(ciphertext)))
+
+    unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
+    data = unpadder.update(plaintext)
+    plaintext_data = data + unpadder.finalize()
+
+    print("Plaintext = " + str(plaintext_data.decode('utf-8')))
 
 
 def start_server():
@@ -131,7 +202,13 @@ def start_server():
                     print('Restarting the server...')
                     break
 
-                if data == SECRET_KEY_MESSAGE:
+                if data == GET_CERTIFICATE:
+                    # Send the certificate to the client
+                    send_certificate_to_client(client_socket)
+                    print('#Step 2: Certificate sent to the client successfully.')
+                    continue
+
+                if data == SECRET_KEY_MESSAGE or data == RENEW_SECRET_KEY_MESSAGE:
                     # Prepare to receive PARAMS and encrypted secret key
                     params = client_socket.recv(1024)
                     encrypted_key = client_socket.recv(1024)
@@ -140,23 +217,30 @@ def start_server():
                     print('Received encrypted secret key:', encrypted_key)
 
                     # Decrypt the secret key
-                    decrypted_secret_key = decrypt_secret_key(encrypted_key, params)
-                    print('Decrypted secret key:', decrypted_secret_key)
+                    decrypted_secret_key = decipher_with_private_key(privkey, encrypted_key, params)
+                    print('#Step 9: Decrypted secret key:', decrypted_secret_key)
+
 
                     # Send a response to the client
                     response = 'Encryption completed.'
+
+                    #if params.toLower() == "aes":    
+                    #iv = os.urandom(16)
+                    #nonce = os.urandom(16)
+                    #do_aes(response, 'ECB', decrypted_secret_key, iv, nonce)
+                    #do_aes(response, 'CBC', decrypted_secret_key, iv, nonce)
+                    #do_aes(response, 'OFB', decrypted_secret_key, iv, nonce)
+                    #do_aes(response, 'CFB', decrypted_secret_key, iv, nonce)
+                    #do_aes(response, 'CTR', decrypted_secret_key, iv, nonce)
+                    print("#Step 10: mensage encrypted with SK")
+
                     client_socket.sendall(response.encode())
                     continue
 
-                if data == 'GET_CERTIFICATE':
-                    # Send the certificate to the client
-                    send_certificate_to_client(client_socket)
-                    print('#Step 2: Certificate sent to the client successfully.')
-                    continue
 
                 # Send a response to the client
-                response = 'Message received: ' + data
-                client_socket.sendall(response.encode())
+                #response = 'Message received: ' + data
+                #client_socket.sendall(response.encode())
 
             # Close the client connection
             client_socket.close()
