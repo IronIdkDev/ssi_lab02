@@ -69,10 +69,13 @@ def decrypt_message(encrypted_message, key):
 
 # Step 1: Alice gets Bob's public key
 bob_public_key = get_bob_public_key()
+print('Step 1 completed') #TODELETE
 
 # Step 3: Alice encrypts the Secret Key using Bob's public key
 secret_key = b'This is a secret key'
 encrypted_secret_key, key = encrypt_secret_key(secret_key, bob_public_key)
+print('Step 3 completed') #TODELETE
+
 
 # Step 4: Alice sends the encrypted Secret Key to Bob
 try:
@@ -85,6 +88,8 @@ except requests.exceptions.HTTPError as e:
     print("Server returned an error:", e)
     print("Response content:", response.content)
     exit(1)
+
+print('Step 4 completed') #TODELETE
 
 # Step 5: Alice receives the encrypted message from Bob
 encrypted_message = response.content

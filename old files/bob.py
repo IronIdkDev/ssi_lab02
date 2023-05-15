@@ -5,6 +5,9 @@ from cryptography.hazmat.backends import default_backend
 from flask import Flask, request, escape
 from flask_wtf.csrf import CSRFProtect
 import secrets
+import logging
+
+logging.basicConfig(level=logging.ERROR)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = secrets.token_hex(16)
@@ -32,6 +35,8 @@ def get_certificate():
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
     return pem
+
+print('Step 2 completed') #TODELETE
 
 # Step 9: Bob deciphers the Secret Key using Bob's private Key
 @app.route('/receive_secret_key', methods=['POST'])
