@@ -14,11 +14,11 @@ SECRET_KEY_MESSAGE = 'SECRET_KEY'
 def create_self_signed_certificate(key):
     print('Creating a self-signed certificate...')
     print('To do this we need to collect some data. Please enter enter it below:')
-    country_name = input('Country Name (2 letter code): ')
-    state_or_province_name = input('State or Province Name (full name): ')
-    locality_name = input('Locality Name (eg, city): ')
-    organization_name = input('Organization Name (eg, company): ')
-    common_name = input('Common Name (e.g. server FQDN or YOUR name): ')
+    country_name = 'PT' #input('Country Name (2 letter code): ')
+    state_or_province_name = 'PT' #input('State or Province Name (full name): ')
+    locality_name = 'PT' #input('Locality Name (eg, city): ')
+    organization_name = 'PT' #input('Organization Name (eg, company): ')
+    common_name = 'PT' #input('Common Name (e.g. server FQDN or YOUR name): ')
     
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, country_name),
@@ -89,6 +89,13 @@ def send_certificate_to_client(client_socket):
     client_socket.sendall(certificate)
     print('Sent certificate to the client.')
 
+def decrypt_secret_key(encrypted_key, params):
+    print('\n', 'Decrypting the secret key...')
+    # Decrypt the secret key
+    decrypt_secret_key = rsa.decrypt(encrypted_key, params)
+    return decrypt_secret_key
+
+
 def start_server():
     server_running = True
     create_key_pair('bob_key.pem')
@@ -126,7 +133,7 @@ def start_server():
 
                 if data == SECRET_KEY_MESSAGE:
                     # Prepare to receive PARAMS and encrypted secret key
-                    params = client_socket.recv(1024).decode()
+                    params = client_socket.recv(1024)
                     encrypted_key = client_socket.recv(1024)
 
                     print('Received PARAMS:', params)
@@ -134,6 +141,7 @@ def start_server():
 
                     # Decrypt the secret key
                     decrypted_secret_key = decrypt_secret_key(encrypted_key, params)
+                    print('Decrypted secret key:', decrypted_secret_key)
 
                     # Send a response to the client
                     response = 'Encryption completed.'
