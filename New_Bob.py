@@ -220,6 +220,10 @@ def start_server():
                     print('Received PARAMS:', params)
                     
                     encrypted_key = client_socket.recv(1024)
+                    #encrypted_key_length_bytes = client_socket.recv(4)
+                    #encrypted_key_length = int.from_bytes(encrypted_key_length_bytes, byteorder='big')
+                    #encrypted_key_bytes = client_socket.recv(encrypted_key_length)
+                    #encrypted_key = int.from_bytes(encrypted_key_bytes, byteorder='big')
                     print('Received encrypted secret key:', encrypted_key)
 
                     # Decrypt the secret key
