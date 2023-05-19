@@ -142,6 +142,11 @@ def do_aes(message, mode, key, iv=None, nonce=None):
 
     print("Plaintext = " + str(plaintext_data.decode('utf-8')))
 
+def do_encrypt_with_sk(message, key, params):
+    iv = os.urandom(16)
+    nonce = os.urandom(16)
+    do_aes(message, params, key, iv, nonce)
+
 
 def start_server():
     server_running = True
@@ -186,7 +191,10 @@ def start_server():
                     print('#Step 9: Decrypted secret key:', decrypted_secret_key)
 
                     response = 'Encryption completed.'
-                    print("#Step 10: message encrypted with SK")
+
+                    message = input("Message to encrypt: ")
+                    do_encrypt_with_sk(message, decrypted_secret_key, params)
+                    print("#Step 10: mensage encrypted with SK")
 
                     client_socket.sendall(response.encode())
                     continue
