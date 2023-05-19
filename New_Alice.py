@@ -5,6 +5,14 @@ from cryptography.hazmat.primitives import hashes
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
+import base64
+import os
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.asymmetric.padding import OAEP, MGF1
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
 # Server details
 SERVER_HOST = 'localhost'
 SERVER_PORT = 1234
@@ -78,30 +86,15 @@ try:
         #get the public key from bob.csr
         public_key = x509_csr.public_key()
 
-    #Receive the certificate from the server
-    #certificate = client_socket.recv(1024)
-    #print('#Step 3 (Alice part): Received certificate (encrypted): ')
-    #print(certificate.decode() + '\n')
-
         # Generate a secret key
         secret_key = b'ThisIsASecretKey'
         print('#Step 4: Generated secret key successfully', '\n')
 
-    # Read the certificate from the file
-    #with open('selfsigned_cert.pem', 'rb') as file:
-     #   certificate_data = file.read()
-
-    # Assume 'certificate_data' contains the raw certificate data
-    #certificate_pk = x509.load_pem_x509_certificate(certificate_data, default_backend())
-
-    # Load the certificate's public key
-    #public_key = certificate_pk.public_key()      
-
         # Encrypt the secret key using the certificate's public key
         encrypted_key = public_key.encrypt(
             secret_key,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            OAEP(
+                mgf=MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None
             )
@@ -111,15 +104,27 @@ try:
         # Send a message indicating we will send the parameters and the encrypted key
         client_socket.send(SECRET_KEY_MESSAGE.encode())
         print('#Step 6: Sent SECRET_KEY message to the server', '\n')
-        
-        # Send PARAMS message to send the details of the algorithms used to protect the messages. It may incude information about the encryption algorithm, the hashing algorithm, the padding algorithm, etc.
+
+        # Send PARAMS message to send the details of the algorithms used to protect the messages.
+        # It may include information about the encryption algorithm, the hashing algorithm, the padding algorithm, etc.
         PARAMS = ENCRYPTION_ALGORITHIM
         client_socket.send(PARAMS.encode())
         print('#Step 7: Sent PARAMS message to the server', '\n')
 
+        # Convert the encrypted_key to bytes
+        encrypted_key_bytes = encrypted_key
+
+        # Send the length of the encrypted_key_bytes as a 4-byte integer
+        encrypted_key_length = len(encrypted_key_bytes)
+        client_socket.send(encrypted_key_length.to_bytes(4, byteorder='big'))
+
+        # Send the encrypted_key_bytes
+        client_socket.send(encrypted_key_bytes)
+
         # Send the encrypted key to the server
-        client_socket.send(encrypted_key)
+        client_socket.sendall(encrypted_key)
         print('#Step 8: Sent encrypted secret key to the server', '\n')
+
 
         # Receive the encrypted message from the server
         encrypted_message = client_socket.recv(1024)
@@ -136,8 +141,8 @@ try:
 
         encrypted_key = public_key.encrypt(
             secret_key,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            OAEP(
+                mgf=MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None
             )

@@ -3,7 +3,13 @@ import datetime
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+
+import base64
+
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
 
 # Server details
 SERVER_HOST = 'localhost'
@@ -124,7 +130,7 @@ def send_certificate_to_client(client_socket):
 
 def decipher_with_private_key(privkey, ciphertext, params):
     print("\nDeciphering with the private key...")
-    plaintext = privkey.decrypt(ciphertext, padding.OAEP(mgf=padding.MGF1(algorithm=params), algorithm=params, label=None))
+    plaintext = privkey.decrypt(ciphertext, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None))
     print("Plaintext = " + str(plaintext.decode()))
 
 # Encrypt with AES, using multiple modes
@@ -211,15 +217,14 @@ def start_server():
                 if data == SECRET_KEY_MESSAGE or data == RENEW_SECRET_KEY_MESSAGE:
                     # Prepare to receive PARAMS and encrypted secret key
                     params = client_socket.recv(1024)
-                    encrypted_key = client_socket.recv(1024)
-
                     print('Received PARAMS:', params)
+                    
+                    encrypted_key = client_socket.recv(1024)
                     print('Received encrypted secret key:', encrypted_key)
 
                     # Decrypt the secret key
                     decrypted_secret_key = decipher_with_private_key(privkey, encrypted_key, params)
                     print('#Step 9: Decrypted secret key:', decrypted_secret_key)
-
 
                     # Send a response to the client
                     response = 'Encryption completed.'
