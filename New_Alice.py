@@ -106,13 +106,6 @@ try:
             # Convert the encrypted_key to bytes
             encrypted_key_bytes = encrypted_key
 
-            # Send the length of the encrypted_key_bytes as a 4-byte integer
-            encrypted_key_length = len(encrypted_key_bytes)
-            client_socket.send(encrypted_key_length.to_bytes(4, byteorder='big'))
-
-            # Send the encrypted_key_bytes
-            client_socket.send(encrypted_key_bytes)
-
             # Send the encrypted key to the server
             client_socket.sendall(encrypted_key_bytes)
             print('#Step 8: Sent encrypted secret key to the server', '\n')
